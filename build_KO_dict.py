@@ -4,9 +4,21 @@
 script to make gene ko codes from img-qiime package not redundant
 """
 
-input_fp = '/Users/leffj/Dropbox/genomes_traits_project/fresh_start/KO_dictionary_img/img-qiime-25oct2012/gene_ko_pathway.txt'
-output_fp = '/Users/leffj/Dropbox/genomes_traits_project/fresh_start/KO_dictionary_img/gene_ko_dictionary.txt'
-outFail_fp = '/Users/leffj/Dropbox/genomes_traits_project/fresh_start/KO_dictionary_img/gene_ko_dictionary_fails.txt'
+import argparse
+
+parser = argparse.ArgumentParser()
+requiredArgs = parser.add_argument_group('required arguments')
+requiredArgs.add_argument('-i', '--input_fp', action='store', dest='input_fp',
+	required=True, help='input filepath, tab delimited')
+requiredArgs.add_argument('-o', '--output_fp', action='store', dest='output_fp',
+	required=True, help='output filepath for KO dictionary')
+requiredArgs.add_argument('-f', '--outFail_fp', action='store', dest='outFail_fp',
+	required=True, help='output filepath for KO entries that failed to be added to dictionary')
+args = parser.parse_args()
+
+input_fp = args.input_fp
+output_fp = args.output_fp
+outFail_fp = args.outFail_fp
 
 input = open(input_fp,'U')
 

@@ -3,6 +3,7 @@
 
 import sys
 import os
+import argparse
 
 
 """
@@ -13,9 +14,19 @@ by counting the abundance of the gene in all categories to which it
 belongs.
 """
 
-geneTable_fp = '/Users/leffj/Dropbox/genomes_traits_project/fresh_start/merged_L4_500000_noHierarc_6spls.txt'
-output_dir = '/Users/leffj/Dropbox/genomes_traits_project/fresh_start/summaries'
-koDictionary_fp = '/Users/leffj/Dropbox/genomes_traits_project/fresh_start/KO_dictionary_img/gene_ko_dictionary.txt'
+parser = argparse.ArgumentParser()
+requiredArgs = parser.add_argument_group('required arguments')
+requiredArgs.add_argument('-i', '--geneTable_fp', action='store', dest='geneTable_fp',
+	required=True, help='input filepath, tab delimited')
+requiredArgs.add_argument('-o', '--output_dir', action='store', dest='output_dir',
+	required=True, help='output directory for summaries')
+requiredArgs.add_argument('-d', '--ko_dictionary_fp', action='store', dest='ko_dictionary_fp',
+	required=True, help='input filepath for KO dictionary file')
+args = parser.parse_args()
+
+geneTable_fp = args.geneTable_fp
+output_dir = args.output_dir
+koDictionary_fp = args.ko_dictionary_fp
 
 
 
@@ -46,6 +57,7 @@ def get_cats_from_hierarchies(geneTable,koDictionary,level):
 			koHiers = koDictionary[ko].split('\t')
 		except KeyError:
 			print 'No match in dictionary for:%s' %(ko)
+			continue
 		# loop through hierarchies for ko and pull cats at desired level
 		# only pull the same cat once to avoid double counting
 		cats = []
