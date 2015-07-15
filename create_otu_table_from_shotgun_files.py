@@ -30,7 +30,7 @@ def main():
         help='The database filepath. So far, only tested with greengenes \
         clustered at 97%% similarity. Format is fasta.')
     parser.add_argument('-o', '--output_dir',
-        default='OTU_table_from_shotgun_creation_files',
+        default='OTU_table_from_shotgun_data_files',
         help='The output directory. Will create if does not exist. In addition \
         to the OTU table, intermediate files will be produced in this dir.')
     parser.add_argument('-a', '--adapter_sequence', default='CTGTCTCTTATA',
