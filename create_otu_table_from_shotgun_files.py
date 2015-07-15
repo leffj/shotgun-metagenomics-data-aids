@@ -115,7 +115,7 @@ def parse_input_file(input_fp):
     sample_fps_R2s = {}
     for line in input:
         fields = line.strip().split('\t')
-        if line_split[0].startswith('#'):
+        if fields[0].startswith('#'):
             continue
         sampleIDs.append(fields[0])
         # check if filepath exists
