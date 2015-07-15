@@ -116,6 +116,11 @@ def parse_input_file(input_fp):
     for line in input:
         fields = line.strip().split('\t')
         sampleIDs.append(fields[0])
+        # check if filepath exists
+        if not os.path.exists(fields[1]):
+            raise RuntimeError("Filepath does not exist: %s" %(fields[1]))
+        if not os.path.exists(fields[2]):
+            raise RuntimeError("Filepath does not exist: %s" %(fields[2]))
         sample_fps_R1s[fields[0]] = fields[1]
         sample_fps_R2s[fields[0]] = fields[2]
     return sampleIDs, sample_fps_R1s, sample_fps_R2s
