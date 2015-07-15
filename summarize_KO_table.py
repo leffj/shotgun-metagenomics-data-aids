@@ -17,7 +17,8 @@ belongs.
 parser = argparse.ArgumentParser()
 requiredArgs = parser.add_argument_group('required arguments')
 requiredArgs.add_argument('-i', '--geneTable_fp', action='store', dest='geneTable_fp',
-	required=True, help='input filepath, tab delimited')
+	required=True, help='input filepath, tab delimited. Only "KO<number>" should be in first '
+	'column')
 requiredArgs.add_argument('-o', '--output_dir', action='store', dest='output_dir',
 	required=True, help='output directory for summaries')
 requiredArgs.add_argument('-d', '--ko_dictionary_fp', action='store', dest='ko_dictionary_fp',
