@@ -24,7 +24,8 @@ def main():
     req.add_argument('-i', '--input_fp', required=True,
         type=str, help='A tab-delimited file with sample IDs in the first \
         column, corresponding filepaths for the forward reads and reverse \
-        reads in the second and third columns, respectively. No header.')
+        reads in the second and third columns, respectively. No header or \
+        header must start with "#".')
     req.add_argument('-d', '--database_fp', required=True,
         help='The database filepath. So far, only tested with greengenes \
         clustered at 97%% similarity. Format is fasta.')
