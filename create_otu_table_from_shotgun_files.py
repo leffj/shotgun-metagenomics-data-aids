@@ -44,6 +44,9 @@ def main():
         help='The filepath for the taxonomy file that links the database \
         identifiers with taxonomy strings. If provided, taxonomy strings \
         will be added to the output OTU table.')
+    parser.add_argument('-g', '--taxonomic_group', default='bacteria',
+        help='Use sequences extracted for either: "bacteria", "archaea", or \
+        "eukaryota".')
 
 
     args = parser.parse_args()
@@ -59,7 +62,7 @@ def main():
 
     # prep summary file
     summary_stats_out = open(out_dir + "summary_stats.txt", "w")
-    summary_stats_out.write("Raw_seq_count\tMerged_seq_count\t\
+    summary_stats_out.write("#Sample_ID\tRaw_seq_count\tMerged_seq_count\t\
         Mean_merged_seq_length\tSSU_seq_count\tSSU_hits_database\tYield\n")
 
     # perform analyses for each sample and record summary stats along the way
@@ -75,9 +78,11 @@ def main():
         print "Getting sequence stats from " + sample + "..."
         merged_seq_count, merged_seq_length = get_seq_stats(merged_fp)
         print "Finding SSU rRNA sequences from " + sample + "..."
-        metaxa_bact_fp = run_metaxa(sample, merged_fp, args.processors, out_dir)
-        print "Mapping SSU rRNA sequences to database for " + sample + "..."
-        readmap_fp = map_seqs_to_db(sample, metaxa_bact_fp, args.database_fp,
+        metaxa_extract_fp = run_metaxa(sample, merged_fp, args.taxonomic_group,
+                                       args.processors, out_dir)
+        print "Mapping %s sequences to database for %s..." % \
+                (args.taxonomic_group, sample)
+        readmap_fp = map_seqs_to_db(sample, metaxa_extract_fp, args.database_fp,
                                  args.processors, out_dir)
         print "Generating OTU counts for " + sample + "..."
         ssu_seq_count, ssu_hits = return_number_SSU_seqs_hits(readmap_fp)
@@ -85,9 +90,9 @@ def main():
                                                            readmap_fp,
                                                            out_dir)
         # Write summary statistics to file
-        summary_stats_out.write("%s\t%s\t%s\t%s\t%s\t%s\n"
-                                %(get_seq_count(gzip.open(R1_fps[sample],
-                                                          'rb')),
+        summary_stats_out.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+                                %(sample, get_seq_count(
+                                gzip.open(R1_fps[sample], 'rb')),
                                 merged_seq_count, merged_seq_length,
                                 ssu_seq_count, ssu_hits,
                                 (float(ssu_hits) / float(merged_seq_count))))
@@ -182,7 +187,7 @@ def get_seq_count(in_f):
         count += 1
     return count
 
-def run_metaxa(sampleID, input_fq_fp, procs, out_dir):
+def run_metaxa(sampleID, input_fq_fp, domain, procs, out_dir):
     if not os.path.exists(out_dir + "metaxa_analysis"):
         os.makedirs(out_dir + "metaxa_analysis")
     output_pre = out_dir + "metaxa_analysis/" + sampleID + "_metaxa"
@@ -191,7 +196,7 @@ def run_metaxa(sampleID, input_fq_fp, procs, out_dir):
     str(procs), "-o", output_pre], stderr = metaxa_log_fp)
     subprocess.call(["mv", "error.log", out_dir + "metaxa_analysis/" + \
                      sampleID + "error.log"])
-    return output_pre + ".bacteria.fasta"
+    return output_pre + "." + domain + ".fasta"
 
 def map_seqs_to_db(sampleID, input_fp, db_fp, procs, out_dir):
     if not os.path.exists(out_dir + "reads_mapped_to_db"):
