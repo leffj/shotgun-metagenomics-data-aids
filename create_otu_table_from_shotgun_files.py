@@ -47,6 +47,10 @@ def main():
     parser.add_argument('-g', '--taxonomic_group', default='bacteria',
         help='Use sequences extracted for either: "bacteria", "archaea", or \
         "eukaryota".')
+    parser.add_argument('-c', '--combined_reads', default=False,
+        help='Set this parameter to "True" if paired-end reads are \
+        interleaved (i.e. they alternate in one file). Uses "pefcon" to \
+        split the reads into separate files.')
 
 
     args = parser.parse_args()
@@ -57,8 +61,18 @@ def main():
         os.makedirs(out_dir)
     out_dir = out_dir + "/"
 
-    # get sample list and associated input files
-    samples, R1_fps, R2_fps = parse_input_file(args.input_fp)
+    # get sample list and associated input files. Deal with interleaved samples
+    # if needed
+    if args.combined_reads:
+        samples, R_fps = parse_input_file(args.input_fp, interleaved=True)
+        R1_fps = {}
+        R2_fps = {}
+        for sample in samples:
+            print "Spliting interleaved reads for " + sample + "..."
+            R1_fps[sample], R2_fps[sample] = \
+                split_interleaved_reads(sample, R_fps[sample], out_dir)
+    else:
+        samples, R1_fps, R2_fps = parse_input_file(args.input_fp)
 
     # prep summary file
     summary_stats_out = open(out_dir + "summary_stats.txt", "w")
@@ -113,24 +127,37 @@ def main():
 
 
 
-def parse_input_file(input_fp):
+def parse_input_file(input_fp, interleaved=False):
     input = open(input_fp, 'U')
     sampleIDs = []
-    sample_fps_R1s = {}
-    sample_fps_R2s = {}
-    for line in input:
-        fields = line.strip().split('\t')
-        if fields[0].startswith('#'):
-            continue
-        sampleIDs.append(fields[0])
-        # check if filepath exists
-        if not os.path.exists(fields[1]):
-            raise RuntimeError("Filepath does not exist: %s" %(fields[1]))
-        if not os.path.exists(fields[2]):
-            raise RuntimeError("Filepath does not exist: %s" %(fields[2]))
-        sample_fps_R1s[fields[0]] = fields[1]
-        sample_fps_R2s[fields[0]] = fields[2]
-    return sampleIDs, sample_fps_R1s, sample_fps_R2s
+    if interleaved:
+        sample_fps = {}
+        for line in input:
+            fields = line.strip().split('\t')
+            if fields[0].startswith('#'):
+                continue
+            sampleIDs.append(fields[0])
+            # check if filepath exists
+            if not os.path.exists(fields[1]):
+                raise RuntimeError("Filepath does not exist: %s" %(fields[1]))
+            sample_fps[fields[0]] = fields[1]
+        return sampleIDs, sample_fps
+    else:
+        sample_fps_R1s = {}
+        sample_fps_R2s = {}
+        for line in input:
+            fields = line.strip().split('\t')
+            if fields[0].startswith('#'):
+                continue
+            sampleIDs.append(fields[0])
+            # check if filepath exists
+            if not os.path.exists(fields[1]):
+                raise RuntimeError("Filepath does not exist: %s" %(fields[1]))
+            if not os.path.exists(fields[2]):
+                raise RuntimeError("Filepath does not exist: %s" %(fields[2]))
+            sample_fps_R1s[fields[0]] = fields[1]
+            sample_fps_R2s[fields[0]] = fields[2]
+        return sampleIDs, sample_fps_R1s, sample_fps_R2s
 
 def remove_adapters(sampleID, R1_in_fp, R2_in_fp, adapter, out_dir):
     if not os.path.exists(out_dir + "adapter_removal"):
@@ -194,8 +221,9 @@ def run_metaxa(sampleID, input_fq_fp, domain, procs, out_dir):
     metaxa_log_fp = open(out_dir + "metaxa_analysis/" + sampleID + "_metaxa_stdout_log", "w")
     subprocess.call(["metaxa2", "-i", input_fq_fp, "-plus", "T", "--cpu",
     str(procs), "-o", output_pre], stderr = metaxa_log_fp)
-    subprocess.call(["mv", "error.log", out_dir + "metaxa_analysis/" + \
-                     sampleID + "error.log"])
+    if os.path.exists("error.log"):
+        subprocess.call(["mv", "error.log", out_dir + "metaxa_analysis/" + \
+                         sampleID + "error.log"])
     return output_pre + "." + domain + ".fasta"
 
 def map_seqs_to_db(sampleID, input_fp, db_fp, procs, out_dir):
@@ -270,6 +298,23 @@ def add_taxonomy_to_otu_table(otu_table_fp, taxonomy_fp):
     output = open(otu_table_fp, 'w')
     output.write("".join(table_out))
     output.close()
+
+def split_interleaved_reads(sampleID, in_fp, out_dir):
+    # pefcon -1 /data/shared/2013_06_NutNet-metagenomic/raw_data/6497.7.45694.AATAGG.fastq.gz -o 6497.7.45694.AATAGG -z --split
+    if not os.path.exists(out_dir + "split_paired_reads"):
+        os.makedirs(out_dir + "split_paired_reads")
+    out_pre = out_dir + "split_paired_reads/" + sampleID
+    log_fp = out_dir + "split_paired_reads/" + sampleID + "_log.txt"
+    log = open(log_fp, 'w')
+    subprocess.call(["pefcon", "-1", in_fp, "-o", out_pre, "-z", "--split"],
+                    stderr = log)
+    out1_fp = out_pre + "_1.fastq"
+    out2_fp = out_pre + "_2.fastq"
+    gzip1 = subprocess.Popen(["gzip", out1_fp])
+    gzip2 = subprocess.Popen(["gzip", out2_fp])
+    gzip1.wait()
+    gzip2.wait()
+    return out1_fp + ".gz", out2_fp + ".gz"
 
 
 if __name__ == "__main__":
