@@ -51,6 +51,11 @@ def main():
         help='Set this parameter to "True" if paired-end reads are \
         interleaved (i.e. they alternate in one file). Uses "pefcon" to \
         split the reads into separate files.')
+    # parser.add_argument('-m', '--merge_reads', default=True,
+    #     help='Set this parameter to "False" to disable merging of paired-end \
+    #     reads. Default = True.') # to do this, need to figure out an alternate
+    # way to map reads to db, since the 'N's that metaxa creates are problematic
+    # for usearch
 
 
     args = parser.parse_args()
