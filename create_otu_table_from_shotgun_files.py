@@ -113,7 +113,7 @@ def main():
         if R1_fps[sample].endswith('.gz'):
             seqs_opened = gzip.open(R1_fps[sample], 'rb')
         else:
-            seqs_opened = open(sequence_reads_fp, 'U')
+            seqs_opened = open(R1_fps[sample], 'U')
         summary_stats_out.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                                 %(sample, get_seq_count(
                                 seqs_opened),
