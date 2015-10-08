@@ -110,9 +110,13 @@ def main():
                                                            readmap_fp,
                                                            out_dir)
         # Write summary statistics to file
+        if R1_fps[sample].endswith('.gz'):
+            seqs_opened = gzip.open(R1_fps[sample], 'rb')
+        else:
+            seqs_opened = open(sequence_reads_fp, 'U')
         summary_stats_out.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                                 %(sample, get_seq_count(
-                                gzip.open(R1_fps[sample], 'rb')),
+                                seqs_opened),
                                 merged_seq_count, merged_seq_length,
                                 ssu_seq_count, ssu_hits,
                                 (float(ssu_hits) / float(merged_seq_count))))
