@@ -7,6 +7,7 @@ __version__ = "0.0.1"
 """
 Create an OTU table from a set of shotgun metagenomes using metaxa and usearch.
 Requires: cutadapt, USEARCH v7, metaxa2
+metaxa2 executable must be named 'metaxa2'
 """
 
 import argparse
