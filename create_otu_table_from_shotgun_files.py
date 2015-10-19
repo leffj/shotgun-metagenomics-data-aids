@@ -20,7 +20,8 @@ from collections import Counter
 
 def main():
     parser = argparse.ArgumentParser(description=\
-        'Create otu table from shotgun files using metaxa2 and usearch')
+        'Create otu table from shotgun files using metaxa2 and usearch. Make sure \
+        metaxa2 is installed properly before running.')
     req = parser.add_argument_group('required arguments')
     req.add_argument('-i', '--input_fp', required=True,
         type=str, help='A tab-delimited file with sample IDs in the first \
@@ -47,12 +48,16 @@ def main():
         will be added to the output OTU table.')
     parser.add_argument('-g', '--taxonomic_group', default='bacteria',
         help='Use sequences extracted for either: "bacteria", "archaea", or \
-        "eukaryota".')
+        "eukaryota". Default = "bacteria"')
     parser.add_argument('-c', '--combined_reads', default=False,
         help='Set this parameter to "True" if paired-end reads are \
         interleaved (i.e. they alternate in one file). Uses "pefcon" to \
         split the reads into separate files.')
-    # parser.add_argument('-m', '--merge_reads', default=True,
+    parser.add_argument('-m', '--metaxa_sequences_dir',
+        help='This argument can be used to specify the metaxa output directory \
+        of a previous run of this script so you do not have to start from the \
+        beginning if investigating another taxonomic group or the run crashes.')
+    # parser.add_argument('-r', '--merge_reads', default=True,
     #     help='Set this parameter to "False" to disable merging of paired-end \
     #     reads. Default = True.') # to do this, need to figure out an alternate
     # way to map reads to db, since the 'N's that metaxa creates are problematic
@@ -65,7 +70,11 @@ def main():
     out_dir = args.output_dir
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
+    else:
+        raise RuntimeError('Output directory already exists. Remove or specify a \
+            new directory.')
     out_dir = out_dir + "/"
+
 
     # get sample list and associated input files. Deal with interleaved samples
     # if needed
@@ -80,60 +89,87 @@ def main():
     else:
         samples, R1_fps, R2_fps = parse_input_file(args.input_fp)
 
-    # prep summary file
-    summary_stats_out = open(out_dir + "summary_stats.txt", "w")
-    summary_stats_out.write("#Sample_ID\tRaw_seq_count\tMerged_seq_count\t\
-        Mean_merged_seq_length\tSSU_seq_count\tSSU_hits_database\tYield\n")
-
-    # perform analyses for each sample and record summary stats along the way
+    # start with metaxa seqs
     otu_counts = {}
-    for sample in samples:
-        print "Removing adapters from " + sample + "..."
-        R1_trim_fp, R2_trim_fp = remove_adapters(sample, R1_fps[sample],
-                                                 R2_fps[sample],
-                                                 args.adapter_sequence,
-                                                 out_dir)
-        print "Merging paired reads from " + sample + "..."
-        merged_fp = merge_paired_reads(sample, R1_trim_fp, R2_trim_fp, out_dir)
-        print "Getting sequence stats from " + sample + "..."
-        merged_seq_count, merged_seq_length = get_seq_stats(merged_fp)
-        print "Finding SSU rRNA sequences from " + sample + "..."
-        metaxa_extract_fp = run_metaxa(sample, merged_fp, args.taxonomic_group,
-                                       args.processors, out_dir)
-        print "Mapping %s sequences to database for %s..." % \
+    if args.metaxa_sequences_dir:
+        for sample in samples:
+            metaxa_extract_fp = "%s/%s_metaxa.%s.fasta" % \
+                (args.metaxa_sequences_dir, sample, args.taxonomic_group)
+            print metaxa_extract_fp
+            print "Mapping %s sequences to database for %s..." % \
                 (args.taxonomic_group, sample)
-        readmap_fp = map_seqs_to_db(sample, metaxa_extract_fp, args.database_fp,
-                                 args.processors, out_dir)
-        print "Generating OTU counts for " + sample + "..."
-        ssu_seq_count, ssu_hits = return_number_SSU_seqs_hits(readmap_fp)
-        otu_counts[sample] = convert_readmap_to_OTU_counts(sample,
-                                                           readmap_fp,
-                                                           out_dir)
-        # Write summary statistics to file
-        if R1_fps[sample].endswith('.gz'):
-            seqs_opened = gzip.open(R1_fps[sample], 'rb')
+            readmap_fp = map_seqs_to_db(sample, metaxa_extract_fp, args.database_fp,
+                                     args.processors, out_dir)
+            print "Generating OTU counts for " + sample + "..."
+            ssu_seq_count, ssu_hits = return_number_SSU_seqs_hits(readmap_fp)
+            otu_counts[sample] = convert_readmap_to_OTU_counts(sample,
+                                                               readmap_fp,
+                                                               out_dir)
+        print "Writting OTU table..."
+        merge_otu_counts_and_write(otu_counts, out_dir + 'otu_table.txt')
+
+        # optionally, add taxonomy strings
+        if args.taxonomy_fp:
+            print "Adding taxonomic classifications..."
+            add_taxonomy_to_otu_table(out_dir + 'otu_table.txt', args.taxonomy_fp)
         else:
-            seqs_opened = open(R1_fps[sample], 'U')
-        summary_stats_out.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
-                                %(sample, get_seq_count(
-                                seqs_opened),
-                                merged_seq_count, merged_seq_length,
-                                ssu_seq_count, ssu_hits,
-                                (float(ssu_hits) / float(merged_seq_count))))
+            print "No taxonomy file provided."
 
-    # merge OTU sequence count data across samples and write to file
-    # otu_counts = {'test1': {'289883': 1, '4469420': 1, '4402605': 1, '4425441': 2,
-    #               '851811': 1, '4470260': 1},
-    #               'test2': {'1138744': 1, '4425441': 5}}
-    print "Writting OTU table..."
-    merge_otu_counts_and_write(otu_counts, out_dir + 'otu_table.txt')
-
-    # optionally, add taxonomy strings
-    if args.taxonomy_fp:
-        print "Adding taxonomic classifications..."
-        add_taxonomy_to_otu_table(out_dir + 'otu_table.txt', args.taxonomy_fp)
+    # or start from beginning
     else:
-        print "No taxonomy file provided."
+        # prep summary file
+        summary_stats_out = open(out_dir + "summary_stats.txt", "w")
+        summary_stats_out.write("#Sample_ID\tRaw_seq_count\tMerged_seq_count\t\
+            Mean_merged_seq_length\tSSU_seq_count\tSSU_hits_database\tYield\n")
+
+        # perform analyses for each sample and record summary stats along the way
+        for sample in samples:
+            print "Removing adapters from " + sample + "..."
+            R1_trim_fp, R2_trim_fp = remove_adapters(sample, R1_fps[sample],
+                                                     R2_fps[sample],
+                                                     args.adapter_sequence,
+                                                     out_dir)
+            print "Merging paired reads from " + sample + "..."
+            merged_fp = merge_paired_reads(sample, R1_trim_fp, R2_trim_fp, out_dir)
+            print "Getting sequence stats from " + sample + "..."
+            merged_seq_count, merged_seq_length = get_seq_stats(merged_fp)
+            print "Finding SSU rRNA sequences from " + sample + "..."
+            metaxa_extract_fp = run_metaxa(sample, merged_fp, args.taxonomic_group,
+                                           args.processors, out_dir)
+            print "Mapping %s sequences to database for %s..." % \
+                    (args.taxonomic_group, sample)
+            readmap_fp = map_seqs_to_db(sample, metaxa_extract_fp, args.database_fp,
+                                     args.processors, out_dir)
+            print "Generating OTU counts for " + sample + "..."
+            ssu_seq_count, ssu_hits = return_number_SSU_seqs_hits(readmap_fp)
+            otu_counts[sample] = convert_readmap_to_OTU_counts(sample,
+                                                               readmap_fp,
+                                                               out_dir)
+            # Write summary statistics to file
+            if R1_fps[sample].endswith('.gz'):
+                seqs_opened = gzip.open(R1_fps[sample], 'rb')
+            else:
+                seqs_opened = open(R1_fps[sample], 'U')
+            summary_stats_out.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+                                    %(sample, get_seq_count(
+                                    seqs_opened),
+                                    merged_seq_count, merged_seq_length,
+                                    ssu_seq_count, ssu_hits,
+                                    (float(ssu_hits) / float(merged_seq_count))))
+
+        # merge OTU sequence count data across samples and write to file
+        # otu_counts = {'test1': {'289883': 1, '4469420': 1, '4402605': 1, '4425441': 2,
+        #               '851811': 1, '4470260': 1},
+        #               'test2': {'1138744': 1, '4425441': 5}}
+        print "Writting OTU table..."
+        merge_otu_counts_and_write(otu_counts, out_dir + 'otu_table.txt')
+
+        # optionally, add taxonomy strings
+        if args.taxonomy_fp:
+            print "Adding taxonomic classifications..."
+            add_taxonomy_to_otu_table(out_dir + 'otu_table.txt', args.taxonomy_fp)
+        else:
+            print "No taxonomy file provided."
 
 
 
