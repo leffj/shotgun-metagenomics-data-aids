@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__author__ = "Jonathan Leff"
+__author__ = "Jonathan Leff, Hannah Holland-Moritz"
 __email__ = "jonathan.leff@colorado.edu"
 __version__ = "0.0.1"
 
