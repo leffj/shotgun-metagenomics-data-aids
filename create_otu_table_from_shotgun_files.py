@@ -238,10 +238,12 @@ def remove_adapters(sampleID, R1_in_fp, R2_in_fp, adapter, out_dir):
     out_summary = open(out_summary_fp, "w")
     if not R2_in_fp == None:
         subprocess.call(["cutadapt", "-a", adapter, "-A", adapter, "-o",
-                        R1_out_fp, "-p", R2_out_fp, R1_in_fp, R2_in_fp],
+                        R1_out_fp, "-p", R2_out_fp, "-f", "fastq", 
+                        R1_in_fp, R2_in_fp],
                         stdout = out_summary)
     else:
-        subprocess.call(["cutadapt", "-a", adapter, "-o", R1_out_fp, R1_in_fp],
+        subprocess.call(["cutadapt", "-a", adapter, "-o", R1_out_fp, "-f", "fastq", 
+                        R1_in_fp],
                         stdout = out_summary)
     out_summary.close()
     if not R2_in_fp == None:
