@@ -49,10 +49,13 @@ def main():
     parser.add_argument('-g', '--taxonomic_group', default='bacteria',
         help='Use sequences extracted for either: "bacteria", "archaea", or \
         "eukaryota". Default = "bacteria"')
-    parser.add_argument('-c', '--combined_reads', default=False,
-        help='Set this parameter to "True" if paired-end reads are \
+    parser.add_argument('-c', '--combined_reads', action='store_true', default=False,
+        help='Use this flag if paired-end reads are \
         interleaved (i.e. they alternate in one file). Uses "pefcon" to \
         split the reads into separate files.')
+    parser.add_argument('-n', '--not_paired', action='store_true', default=False,
+        help='Use this flag if you are not supplying \
+        paired-end reads.')
     parser.add_argument('-m', '--metaxa_sequences_dir',
         help='This argument can be used to specify the metaxa output directory \
         of a previous run of this script so you do not have to start from the \
@@ -87,7 +90,11 @@ def main():
             R1_fps[sample], R2_fps[sample] = \
                 split_interleaved_reads(sample, R_fps[sample], out_dir)
     else:
-        samples, R1_fps, R2_fps = parse_input_file(args.input_fp)
+        if not args.not_paired:
+            samples, R1_fps, R2_fps = parse_input_file(args.input_fp, 
+                paired=(not args.not_paired))
+        else:
+            samples, R1_fps = parse_input_file(args.input_fp, paired=(not args.not_paired))
 
     # start with metaxa seqs
     otu_counts = {}
@@ -125,12 +132,23 @@ def main():
         # perform analyses for each sample and record summary stats along the way
         for sample in samples:
             print "Removing adapters from " + sample + "..."
-            R1_trim_fp, R2_trim_fp = remove_adapters(sample, R1_fps[sample],
+            # only use single end reads if flag set
+            if not args.not_paired:
+                R1_trim_fp, R2_trim_fp = remove_adapters(sample, R1_fps[sample],
                                                      R2_fps[sample],
                                                      args.adapter_sequence,
                                                      out_dir)
-            print "Merging paired reads from " + sample + "..."
-            merged_fp = merge_paired_reads(sample, R1_trim_fp, R2_trim_fp, out_dir)
+            else:
+                R1_trim_fp = remove_adapters(sample, R1_fps[sample], 
+                                                     None,
+                                                     args.adapter_sequence,
+                                                     out_dir)
+            # don't attempt to merge paired reads if flag set
+            if not args.not_paired:
+                print "Merging paired reads from " + sample + "..."
+                merged_fp = merge_paired_reads(sample, R1_trim_fp, R2_trim_fp, out_dir)
+            else:
+                merged_fp = R1_trim_fp
             print "Getting sequence stats from " + sample + "..."
             merged_seq_count, merged_seq_length = get_seq_stats(merged_fp)
             print "Finding SSU rRNA sequences from " + sample + "..."
@@ -173,7 +191,7 @@ def main():
 
 
 
-def parse_input_file(input_fp, interleaved=False):
+def parse_input_file(input_fp, paired, interleaved=False):
     input = open(input_fp, 'U')
     sampleIDs = []
     if interleaved:
@@ -199,25 +217,37 @@ def parse_input_file(input_fp, interleaved=False):
             # check if filepath exists
             if not os.path.exists(fields[1]):
                 raise RuntimeError("Filepath does not exist: %s" %(fields[1]))
-            if not os.path.exists(fields[2]):
-                raise RuntimeError("Filepath does not exist: %s" %(fields[2]))
             sample_fps_R1s[fields[0]] = fields[1]
-            sample_fps_R2s[fields[0]] = fields[2]
-        return sampleIDs, sample_fps_R1s, sample_fps_R2s
+            if paired:
+                if not os.path.exists(fields[2]):
+                    raise RuntimeError("Filepath does not exist: %s" %(fields[2]))
+                sample_fps_R2s[fields[0]] = fields[2]
+        if paired:
+            return sampleIDs, sample_fps_R1s, sample_fps_R2s
+        else:
+            return sampleIDs, sample_fps_R1s
 
 def remove_adapters(sampleID, R1_in_fp, R2_in_fp, adapter, out_dir):
     if not os.path.exists(out_dir + "adapter_removal"):
         os.makedirs(out_dir + "adapter_removal")
     R1_out_fp = out_dir + "adapter_removal/" + sampleID + "_R1_trim.fq"
-    R2_out_fp = out_dir + "adapter_removal/" + sampleID + "_R2_trim.fq"
+    if not R2_in_fp == None:
+        R2_out_fp = out_dir + "adapter_removal/" + sampleID + "_R2_trim.fq"
     info_out_fp = out_dir + "adapter_removal/" + sampleID + "_cutadapt_info.txt"
     out_summary_fp = out_dir + "adapter_removal/" + sampleID + "_cutadapt_summary.txt"
     out_summary = open(out_summary_fp, "w")
-    subprocess.call(["cutadapt", "-a", adapter, "-A", adapter, "-o",
-                    R1_out_fp, "-p", R2_out_fp, R1_in_fp, R2_in_fp],
-                    stdout = out_summary)
+    if not R2_in_fp == None:
+        subprocess.call(["cutadapt", "-a", adapter, "-A", adapter, "-o",
+                        R1_out_fp, "-p", R2_out_fp, R1_in_fp, R2_in_fp],
+                        stdout = out_summary)
+    else:
+        subprocess.call(["cutadapt", "-a", adapter, "-o", R1_out_fp, R1_in_fp],
+                        stdout = out_summary)
     out_summary.close()
-    return R1_out_fp, R2_out_fp
+    if not R2_in_fp == None:
+        return R1_out_fp, R2_out_fp
+    else:
+        return R1_out_fp
 
 def merge_paired_reads(sampleID, R1_fp, R2_fp, out_dir):
     if not os.path.exists(out_dir + "merged_paired_reads"):
